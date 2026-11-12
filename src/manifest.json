@@ -1,0 +1,22 @@
+{
+    "name": "NowOnAir",
+    "options_page": "options.html",
+    "version": "1.0.0",
+    "manifest_version": 3,
+    "description": "昔のアニメをリアタイ化する拡張機能",
+    "permissions": [
+        "storage"
+    ],
+    "content_scripts": [
+        {
+            "matches": [
+                "https://github.com/*",
+                "https://tv.dmm.com/*"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "run_at": "document_end"
+        }
+    ]
+}
