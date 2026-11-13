@@ -1,19 +1,23 @@
 import { useEffect, useState } from "react";
 import { getWorkId } from "../shared/platforms/dmm";
+import type { PopupMessage, RegisterWorkResponse } from "../shared/types";
 
-// 話のIDを集める処理がどこまで進んだか
+// 作品を登録する処理がどこまで進んだか
 type ScrapeState =
   | { kind: "idle" }
   | { kind: "running" }
-  | { kind: "done"; episodeIds: string[] }
+  | { kind: "done"; title: string; episodeCount: number }
   | { kind: "error"; message: string };
 
 // ポップアップを開いたタブがどのページか
-// 一覧ページのときだけ集める処理の状態を持つ
+// 一覧ページのときだけ登録する処理の状態を持つ
 type PopupState =
   | { kind: "loading" }
   | { kind: "notDetail" }
-  | { kind: "detail"; workId: string; scrape: ScrapeState };
+  // すでに登録してある作品の一覧ページ
+  // 集める処理はないのでdetailとは分ける
+  | { kind: "registered"; title: string }
+  | { kind: "detail"; tabId: number; workId: string; scrape: ScrapeState };
 
 export default function App() {
   const [state, setState] = useState<PopupState>({ kind: "loading" });
@@ -22,14 +26,50 @@ export default function App() {
   // 最初の表示がそのままポップアップを開いたときになる
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      // isDetailUrlではなくgetWorkIdで一覧ページかを判定する
+      // 一覧ページでもseasonがなければ作品IDが取れず登録できないので
+      // その場合もまとめてnullになるgetWorkIdを使う
       const workId = tab?.url ? getWorkId(tab.url) : null;
-      if (workId) {
-        setState({ kind: "detail", workId, scrape: { kind: "idle" } });
+      if (tab?.id !== undefined && workId) {
+        setState({
+          kind: "detail",
+          tabId: tab.id,
+          workId,
+          scrape: { kind: "idle" },
+        });
       } else {
         setState({ kind: "notDetail" });
       }
     });
   }, []);
+
+  // 登録はcontent scriptに任せる
+  // ポップアップは閉じると処理が止まるので保存まで向こうでやってもらう
+  async function registerWork(tabId: number, workId: string): Promise<void> {
+    const setScrape = (scrape: ScrapeState) =>
+      setState({ kind: "detail", tabId, workId, scrape });
+
+    setScrape({ kind: "running" });
+    try {
+      const message: PopupMessage = { type: "registerWork" };
+      const res: RegisterWorkResponse = await chrome.tabs.sendMessage(
+        tabId,
+        message,
+      );
+      if (res.ok) {
+        setScrape({
+          kind: "done",
+          title: res.title,
+          episodeCount: res.episodeCount,
+        });
+      } else {
+        setScrape({ kind: "error", message: res.message });
+      }
+    } catch (e) {
+      // content scriptが動いていないと受け取り手がいないというエラーになる
+      setScrape({ kind: "error", message: String(e) });
+    }
+  }
 
   return (
     <main style={{ width: 240, padding: 12 }}>
@@ -37,8 +77,23 @@ export default function App() {
       {state.kind === "loading" && <p>読み込み中…</p>}
       {state.kind === "notDetail" && <p>作品の一覧ページで開いてください</p>}
       {state.kind === "detail" && (
-        // TODO: 押したときにcontent scriptへ話のIDを集めるよう頼む
-        <button>この作品をリアタイ化する</button>
+        <>
+          {state.scrape.kind === "idle" && (
+            <button onClick={() => registerWork(state.tabId, state.workId)}>
+              この作品をリアタイ化する
+            </button>
+          )}
+          {state.scrape.kind === "running" && <p>登録中…</p>}
+          {state.scrape.kind === "done" && (
+            <p>
+              「{state.scrape.title}」の{state.scrape.episodeCount}
+              話を登録しました
+            </p>
+          )}
+          {state.scrape.kind === "error" && (
+            <p>登録できませんでした：{state.scrape.message}</p>
+          )}
+        </>
       )}
     </main>
   );
