@@ -12,6 +12,9 @@ export default defineManifest({
   // ポップアップを開いたタブのURLを読むため
   // tabs権限だと強い警告が出るのでactiveTabにする
   permissions: ["activeTab", "storage"],
+  // Message Passingのasync利用のため、Chrome148以降を要求する
+  // https://developer.chrome.com/docs/extensions/develop/concepts/messaging?hl=ja
+  minimum_chrome_version: "148",
   
   content_scripts: [
     {

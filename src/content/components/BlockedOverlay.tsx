@@ -20,7 +20,7 @@ const buttonStyle: CSSProperties = {
   cursor: "pointer",
 };
 
-// コンテンツをブロックしたことを知らせる画面
+// コンテンツをブロックしたことを表示する画面
 export function BlockedOverlay() {
   // 直接アクセスした場合は戻る先がないのでボタンを出さない
   const canGoBack = window.navigation.canGoBack;

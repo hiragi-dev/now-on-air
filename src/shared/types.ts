@@ -32,7 +32,7 @@ export type PopupMessage = { type: "registerWork" };
 // 種類は登録の処理を作るときに足す
 export type RegisterWorkError = { type: "unknown"; message: string };
 
-// registerWorkへの返事
+// registerWorkの応答
 export type RegisterWorkResponse =
   | { ok: true; title: string; episodeCount: number }
   | { ok: false; error: RegisterWorkError };

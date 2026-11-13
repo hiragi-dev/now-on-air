@@ -1,6 +1,7 @@
 import { createRoot, type Root } from "react-dom/client";
 import { BlockedOverlay } from "./components/BlockedOverlay";
 import { isPlaybackUrl } from "../shared/platforms/dmm";
+import type { PopupMessage, RegisterWorkResponse } from "../shared/types";
 
 console.log("[NowOnAir] content script loaded:", location.href);
 
@@ -29,7 +30,7 @@ type BlockedOverlayHandle = {
   root: Root;
 };
 
-// コンテンツをブロックしたことを知らせる画面を全体に表示する
+// コンテンツをブロックしたことを示す画面を全体に表示する
 // 作ったものを返す
 function showBlockedOverlay(): BlockedOverlayHandle {
   // bodyを土台にするとサイトの中身がReactに消されるので専用のdivを作る
@@ -54,7 +55,7 @@ function findVideo(): boolean {
   return true;
 }
 
-// videoの出現を待っているMutationObserver
+// videoの追加を監視するMutationObserver
 // なければnull
 let videoObserver: MutationObserver | null = null;
 
@@ -84,7 +85,7 @@ function startWatchingForVideo(): void {
 function blockIfNeeded(): void {
   if (!isBlockedUrl(location.href)) return;
 
-  // videoの読み込みを待たずにブロックしたことを知らせる
+  // videoの読み込みを待機せずにブロック画面を表示する
   blockedOverlay = showBlockedOverlay();
   startWatchingForVideo();
 }
@@ -106,7 +107,13 @@ window.navigation.addEventListener("currententrychange", () => {
 blockIfNeeded();
 
 // ポップアップからのメッセージ
-// 今は届くかを確かめるだけ
-chrome.runtime.onMessage.addListener((message, sender) => {
-  console.log("[NowOnAir] message received:", message, sender);
-});
+// asyncにしてPromiseを返すと解決した値が応答として送信される
+chrome.runtime.onMessage.addListener(
+  async (message: PopupMessage, sender): Promise<RegisterWorkResponse> => {
+    console.log("[NowOnAir] message received:", message, sender);
+
+    // TODO: 登録の処理を作ったら差し替える
+    // 今はポップアップが応答を受信できるかを確認するための仮の値
+    return { ok: true, title: "仮", episodeCount: 0 };
+  },
+);

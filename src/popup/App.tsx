@@ -6,7 +6,7 @@ import type {
   RegisterWorkResponse,
 } from "../shared/types";
 
-// content scriptにメッセージを届けられなかったときのエラー
+// content scriptへのメッセージ送信に失敗したときのエラー
 // ポップアップの中でしか起きないのでsharedには置かない
 type SendError =
   | { type: "needsReload" }
@@ -78,8 +78,8 @@ export default function App() {
     });
   }, []);
 
-  // 登録はcontent scriptに任せる
-  // ポップアップは閉じると処理が止まるので保存まで向こうでやってもらう
+  // 登録処理はcontent scriptに委譲する
+  // ポップアップは閉じると処理が中断されるので保存までcontent scriptで実行する
   async function registerWork(tabId: number, workId: string): Promise<void> {
     const setScrape = (scrape: ScrapeState) =>
       setState({ kind: "detail", tabId, workId, scrape });
