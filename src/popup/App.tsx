@@ -7,23 +7,23 @@ import type {
 } from "../shared/types";
 
 // content scriptへのメッセージ送信に失敗したときのエラー
-// ポップアップの中でしか起きないのでsharedには置かない
+// ポップアップ内でのみ発生するのでsharedには配置しない
 type SendError =
   | { type: "needsReload" }
   | { type: "unknown"; message: string; };
 
-// 登録で起きうるエラー
-// 送る途中で起きたものとcontent script側で起きたものの両方
+// 登録処理で発生しうるエラー
+// 送信時に発生したものとcontent script側で発生したものの両方
 type ScrapeError = SendError | RegisterWorkError;
 
-// 作品を登録する処理がどこまで進んだか
+// 作品の登録処理の進行状態
 type ScrapeState =
   | { kind: "idle" }
   | { kind: "running" }
   | { kind: "done"; title: string; episodeCount: number }
   | { kind: "error"; error: ScrapeError };
 
-// エラーの種類ごとにユーザーに見せる内容を変える
+// エラーの種類ごとにユーザーに表示する内容を変更する
 function ScrapeErrorView({ error }: { error: ScrapeError }) {
   switch (error.type) {
     case "needsReload":
@@ -34,30 +34,30 @@ function ScrapeErrorView({ error }: { error: ScrapeError }) {
 }
 
 // ポップアップを開いたタブがどのページか
-// 一覧ページのときだけ登録する処理の状態を持つ
+// 一覧ページのときだけ登録処理の状態を保持する
 type PopupState =
   | { kind: "loading" }
   | { kind: "notDetail" }
   // すでに登録してある作品の一覧ページ
-  // 集める処理はないのでdetailとは分ける
+  // 収集処理は不要なのでdetailとは区別する
   | { kind: "registered"; title: string }
   | { kind: "detail"; tabId: number; workId: string; scrape: ScrapeState };
 
 export default function App() {
   const [state, setState] = useState<PopupState>({ kind: "loading" });
 
-  // ポップアップは開くたびに読み込み直されるので
-  // 最初の表示がそのままポップアップを開いたときになる
+  // ポップアップは開くたびに再読み込みされるので
+  // 初回のレンダリングがポップアップを開いた時点に対応する
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       // isDetailUrlではなくgetWorkIdで一覧ページかを判定する
-      // 一覧ページでもseasonがなければ作品IDが取れず登録できないので
-      // その場合もまとめてnullになるgetWorkIdを使う
+      // 一覧ページでもseasonがなければ作品IDを取得できず登録できないので
+      // その場合もnullを返すgetWorkIdを使用する
       let workId = tab?.url ? getWorkId(tab.url) : null;
 
       // デバッグ用
-      // GitHubのページでもボタンを出してメッセージの連携を試せるようにする
-      // devのときだけ有効でbuildの成果物には入らない
+      // GitHubのページでもボタンを表示してメッセージ連携をテストできるようにする
+      // devのときのみ有効でbuildの成果物には含まれない
       if (
         import.meta.env.DEV &&
         !workId &&
@@ -102,10 +102,10 @@ export default function App() {
       }
     } catch (e) {
       const message = String(e);
-      // content scriptが動いていないと受け取り手がいないというエラーになる
-      // 拡張機能を更新したあと読み込み直していないタブで起きる
-      // 文言はChromeが決めていて仕様では保証されていない
-      // 変わった場合はunknownとしてそのまま表示される
+      // content scriptが実行されていないと受信側が存在しないというエラーが発生する
+      // 拡張機能の更新後に再読み込みしていないタブで発生する
+      // エラー文はChromeが定義していて仕様では保証されていない
+      // 変更された場合はunknownとしてそのまま表示される
       if (message.includes("Receiving end does not exist")) {
         setScrape({ kind: "error", error: { type: "needsReload" } });
       } else {

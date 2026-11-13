@@ -10,7 +10,7 @@ function isBlockedUrl(url: string): boolean {
   if (!isPlaybackUrl(url)) return false;
 
   // TODO: ブロック対象のURLの一覧と照合する
-  // 一覧をどこにどう持つかは未決定なので今は再生ページすべてを対象にする
+  // 一覧をどこにどう保持するかは未決定なので今は再生ページすべてを対象にする
   return true;
 }
 
@@ -24,16 +24,16 @@ function attachToVideo(video: HTMLVideoElement): void {
 }
 
 // Reactで描画したブロック画面
-// 消すときにunmountとremoveの両方が必要なので土台のdivとrootを一緒に持つ
+// 削除するときにunmountとremoveの両方が必要なのでコンテナのdivとrootをまとめて保持する
 type BlockedOverlayHandle = {
   container: HTMLDivElement;
   root: Root;
 };
 
 // コンテンツをブロックしたことを示す画面を全体に表示する
-// 作ったものを返す
+// 生成したハンドルを返す
 function showBlockedOverlay(): BlockedOverlayHandle {
-  // bodyを土台にするとサイトの中身がReactに消されるので専用のdivを作る
+  // bodyをルートにするとサイトの要素がReactに削除されるので専用のdivを作成する
   const container = document.createElement("div");
   document.body.append(container);
 
@@ -47,7 +47,7 @@ function hideBlockedOverlay(handle: BlockedOverlayHandle): void {
   handle.container.remove();
 }
 
-// videoが見つかれば停止処理を付けてtrueを返す
+// videoが存在すれば停止処理を登録してtrueを返す
 function findVideo(): boolean {
   const video = document.querySelector("video");
   if (!video) return false;
@@ -69,19 +69,19 @@ function stopWatchingForVideo(): void {
 }
 
 function startWatchingForVideo(): void {
-  // 監視を始める時点ですでにあるvideo
+  // 監視を開始する時点で既に存在するvideo
   findVideo();
 
-  // プレイヤーがvideoを作り直すことがあるので見つけたあとも監視を続ける
-  // 監視をやめるのはページを移動したとき
+  // プレイヤーがvideoを再生成することがあるので検出後も監視を続行する
+  // 監視を停止するのはページ遷移時
   videoObserver = new MutationObserver(() => {
     findVideo();
   });
   videoObserver.observe(document.body, { childList: true, subtree: true });
 }
 
-// ブロック対象のページならブロック画面を出してvideoを止める
-// ページ読み込みとSPA内の遷移の両方がここを通る
+// ブロック対象のページならブロック画面を表示してvideoを停止する
+// ページ読み込みとSPA内の遷移の両方がこの関数を経由する
 function blockIfNeeded(): void {
   if (!isBlockedUrl(location.href)) return;
 
@@ -91,12 +91,12 @@ function blockIfNeeded(): void {
 }
 
 // SPA内の遷移
-// 前のページの監視とブロック画面が残っていれば片付けてから始め直す
+// 前のページの監視とブロック画面が残存していれば解放してから再開する
 window.navigation.addEventListener("currententrychange", () => {
   console.log("[NowOnAir] navigated:", location.href);
   stopWatchingForVideo();
 
-  // SPAは拡張機能が追加した要素を知らないので自分で消す
+  // SPAは拡張機能が追加した要素を管理していないので拡張機能側で削除する
   if (blockedOverlay) hideBlockedOverlay(blockedOverlay);
   blockedOverlay = null;
 
@@ -112,7 +112,7 @@ chrome.runtime.onMessage.addListener(
   async (message: PopupMessage, sender): Promise<RegisterWorkResponse> => {
     console.log("[NowOnAir] message received:", message, sender);
 
-    // TODO: 登録の処理を作ったら差し替える
+    // TODO: 登録処理を実装したら置換する
     // 今はポップアップが応答を受信できるかを確認するための仮の値
     return { ok: true, title: "仮", episodeCount: 0 };
   },

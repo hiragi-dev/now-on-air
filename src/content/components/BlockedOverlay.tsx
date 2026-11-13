@@ -22,7 +22,7 @@ const buttonStyle: CSSProperties = {
 
 // コンテンツをブロックしたことを表示する画面
 export function BlockedOverlay() {
-  // 直接アクセスした場合は戻る先がないのでボタンを出さない
+  // 直接アクセスした場合は遷移先の履歴がないのでボタンを表示しない
   const canGoBack = window.navigation.canGoBack;
 
   return (

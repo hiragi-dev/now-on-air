@@ -9,8 +9,8 @@ export default defineManifest({
   action: {
     default_popup: "src/popup/index.html",
   },
-  // ポップアップを開いたタブのURLを読むため
-  // tabs権限だと強い警告が出るのでactiveTabにする
+  // ポップアップを開いたタブのURLを取得するため
+  // tabs権限では強い警告が表示されるのでactiveTabを使用する
   permissions: ["activeTab", "storage"],
   // Message Passingのasync利用のため、Chrome148以降を要求する
   // https://developer.chrome.com/docs/extensions/develop/concepts/messaging?hl=ja
