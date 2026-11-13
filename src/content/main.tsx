@@ -1,11 +1,8 @@
 import { createRoot, type Root } from "react-dom/client";
 import { BlockedOverlay } from "./components/BlockedOverlay";
+import { isPlaybackUrl } from "../shared/platforms/dmm";
 
 console.log("[NowOnAir] content script loaded:", location.href);
-
-function isPlaybackUrl(url: string): boolean {
-  return url.includes("playback");
-}
 
 // 再生ページのうちブロック対象のURLならtrueを返す
 function isBlockedUrl(url: string): boolean {
