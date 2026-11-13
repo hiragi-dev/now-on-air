@@ -11,11 +11,13 @@ export default defineManifest({
   },
   // ポップアップを開いたタブのURLを読むため
   // tabs権限だと強い警告が出るのでactiveTabにする
-  permissions: ["activeTab"],
+  permissions: ["activeTab", "storage"],
+  
   content_scripts: [
     {
       matches: ["https://tv.dmm.com/*", "https://github.com/*"],
       js: ["src/content/main.tsx"],
+      run_at: "document_start"
     },
   ],
 });

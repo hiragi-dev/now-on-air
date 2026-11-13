@@ -104,3 +104,9 @@ window.navigation.addEventListener("currententrychange", () => {
 
 // 直接アクセスやリロードでページが読み込まれたとき
 blockIfNeeded();
+
+// ポップアップからのメッセージ
+// 今は届くかを確かめるだけ
+chrome.runtime.onMessage.addListener((message, sender) => {
+  console.log("[NowOnAir] message received:", message, sender);
+});

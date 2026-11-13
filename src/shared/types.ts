@@ -27,7 +27,12 @@ export type WatchingAnime = z.infer<typeof WatchingAnimeV1>;
 // 操作が増えたらここに足す
 export type PopupMessage = { type: "registerWork" };
 
+// registerWorkでcontent script側の処理が失敗したときのエラー
+// 種類ごとにポップアップで表示を変える
+// 種類は登録の処理を作るときに足す
+export type RegisterWorkError = { type: "unknown"; message: string };
+
 // registerWorkへの返事
 export type RegisterWorkResponse =
   | { ok: true; title: string; episodeCount: number }
-  | { ok: false; message: string };
+  | { ok: false; error: RegisterWorkError };
