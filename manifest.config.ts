@@ -12,7 +12,7 @@ export default defineManifest({
   content_scripts: [
     {
       matches: ["https://tv.dmm.com/*", "https://github.com/*"],
-      js: ["src/content/main.ts"],
+      js: ["src/content/main.tsx"],
     },
   ],
 });
