@@ -37,12 +37,19 @@ chrome.runtime.onConnect.addListener((port) => {
   // 追加された要素の中だけで数えるとスクロールで追加された分が先頭から数え直されるため
   // ページ全体の各話リンクは呼び出しごとに1回だけ列挙する
   function collectFrom(root: Element, workId: string, startNumber: number) {
-    const pageIds = findEpisodeLinks(document.body, workId).map((l) => l.id);
+    // 作品の一覧はダイアログとして表示される
+    // ダイアログの背後に元のページのリンクが残るので順番の計算はダイアログ内に限定する
+    const dialog = document.querySelector('[role="dialog"]');
+    if (dialog === null) {
+      console.error("[NowOnAir] 作品の一覧のダイアログが見つかりません");
+      return;
+    }
+    const pageIds = findEpisodeLinks(dialog, workId).map((l) => l.id);
     const newEpisodes: CapturedEpisode[] = [];
     for (const link of findEpisodeLinks(root, workId)) {
       if (collectedIds.has(link.id)) continue;
       const index = pageIds.indexOf(link.id);
-      // ページから削除済みの要素は順番を特定できないので収集しない
+      // ダイアログ外のリンクや削除済みの要素は順番を特定できないので収集しない
       if (index === -1) continue;
       collectedIds.add(link.id);
       newEpisodes.push({ ...link, number: startNumber + index });
