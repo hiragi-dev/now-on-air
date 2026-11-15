@@ -1,6 +1,6 @@
 import { createRoot, type Root } from "react-dom/client";
 import { BlockedOverlay } from "./components/BlockedOverlay";
-import { isPlaybackUrl } from "../shared/platforms/dmm";
+import { isPlaybackUrl, collectEpisodeIds } from "../shared/platforms/dmm";
 import type { PopupMessage, RegisterWorkResponse } from "../shared/types";
 
 console.log("[NowOnAir] content script loaded:", location.href);
@@ -111,6 +111,13 @@ blockIfNeeded();
 chrome.runtime.onMessage.addListener(
   async (message: PopupMessage, sender): Promise<RegisterWorkResponse> => {
     console.log("[NowOnAir] message received:", message, sender);
+
+    // TODO: デバッグ用
+    // 本物のページで収集したIDが有効か確認する
+    console.log(
+      "[NowOnAir] collected episode ids:",
+      collectEpisodeIds(message.workId),
+    );
 
     // TODO: 登録処理を実装したら置換する
     // 今はポップアップが応答を受信できるかを確認するための仮の値

@@ -25,7 +25,9 @@ export type WatchingAnime = z.infer<typeof WatchingAnimeV1>;
 
 // ポップアップからcontent scriptに送信するメッセージ
 // 操作が増えたらここに追加する
-export type PopupMessage = { type: "registerWork" };
+// workIdはcontent scriptでもURLから取得できるが
+// テストで開いているページとは別の作品IDを指定できるようにメッセージで渡す
+export type PopupMessage = { type: "registerWork"; workId: string };
 
 // registerWorkでcontent script側の処理が失敗したときのエラー
 // 種類ごとにポップアップの表示を変更する

@@ -86,7 +86,7 @@ export default function App() {
 
     setScrape({ kind: "running" });
     try {
-      const message: PopupMessage = { type: "registerWork" };
+      const message: PopupMessage = { type: "registerWork", workId };
       const res: RegisterWorkResponse = await chrome.tabs.sendMessage(
         tabId,
         message,

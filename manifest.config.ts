@@ -6,19 +6,27 @@ export default defineManifest({
   name: "NowOnAir",
   description: "昔のアニメをリアタイ化する拡張機能",
   version: pkg.version,
-  action: {
-    default_popup: "src/popup/index.html",
-  },
+  action: {},
   // ポップアップを開いたタブのURLを取得するため
   // tabs権限では強い警告が表示されるのでactiveTabを使用する
-  permissions: ["activeTab", "storage"],
+  // アクションアイコンのクリック時にサイドパネルを表示するため
+  permissions: ["activeTab", "storage", "sidePanel"],
+  // サービスワーカーで対象サイトのタブのURLを取得するため
+  host_permissions: ["https://tv.dmm.com/*"],
+  side_panel: {
+    default_path: "src/sidepanel/index.html",
+  },
+  background: {
+    service_worker: "src/background/main.ts",
+    type: "module",
+  },
   // Message Passingのasync利用のため、Chrome148以降を要求する
   // https://developer.chrome.com/docs/extensions/develop/concepts/messaging?hl=ja
   minimum_chrome_version: "148",
   
   content_scripts: [
     {
-      matches: ["https://tv.dmm.com/*", "https://github.com/*"],
+      matches: ["https://tv.dmm.com/*"],
       js: ["src/content/main.tsx"],
       run_at: "document_start"
     },
