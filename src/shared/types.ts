@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// ポップアップとcontent scriptの両方で使用する型
+// サイドパネルとcontent scriptの両方で使用する型
 
 // リアタイ化している作品のバージョン1
 // 開始日時と間隔から解禁された話数を都度計算する
@@ -23,18 +23,30 @@ export const WatchingAnimeV1 = z.object({
 // バージョンを更新したらここを置換する
 export type WatchingAnime = z.infer<typeof WatchingAnimeV1>;
 
-// ポップアップからcontent scriptに送信するメッセージ
-// 操作が増えたらここに追加する
-// workIdはcontent scriptでもURLから取得できるが
-// テストで開いているページとは別の作品IDを指定できるようにメッセージで渡す
-export type SidePanelMessage = { type: "registerWork"; workId: string };
+// 録画中に収集した各話の情報
+export type CapturedEpisode = {
+  // 各話のリンクのcontentパラメータ
+  id: string;
+  // 各話のリンク内の文字列
+  label: string;
+  // 話数
+  number: number;
+};
 
-// registerWorkでcontent script側の処理が失敗したときのエラー
-// 種類ごとにポップアップの表示を変更する
-// 種類は登録処理を実装するときに追加する
-export type RegisterWorkError = { type: "unknown"; message: string };
+// 録画用のPortを識別する名前
+// collector.tsをサイドパネルから読み込むとリスナーが登録されるのでsharedに配置する
+export const CAPTURE_PORT_NAME = "capture";
 
-// registerWorkの応答
-export type RegisterWorkResponse =
-  | { ok: true; title: string; episodeCount: number }
-  | { ok: false; error: RegisterWorkError };
+// Portでサイドパネルからcontent scriptに送信するメッセージ
+// workIdは収集したリンクが対象作品のものか判定するために使用する
+export type SidePanelToContentMessage =
+  | { type: "captureStart"; workId: string }
+  | { type: "captureEnd" };
+
+// Portでcontent scriptからサイドパネルに送信するメッセージ
+// 新しく収集した各話だけを送信する
+export type ContentToSidePanelMessage = {
+  type: "diff";
+  episodes: CapturedEpisode[];
+};
+

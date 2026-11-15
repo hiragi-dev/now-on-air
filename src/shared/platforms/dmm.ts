@@ -27,28 +27,44 @@ export function getWorkId(url: string): string | null {
   return new URL(url).searchParams.get("season");
 }
 
-// collectEpisodeIdsの結果
-export type CollectEpisodeIdsResult =
-  | { kind: "found"; ids: string[] }
-  // 1件も収集できなかった
-  // ページ側の仕様変更や収集するタイミングの考慮漏れで発生する
-  | { kind: "notFound" };
+// 各話のIDと表示用の文字列
+export type EpisodeLink = { id: string; label: string };
 
-// 一覧ページから各話のIDを収集する
-// 各話のリンクのhrefに含まれるcontentパラメータを各話のIDとして扱う
+// 要素とその子孫から各話のリンクを検索する
+// 録画中に追加された要素だけを調べるために使用する
 // 他の作品のリンクを除外するためseasonがworkIdと一致するリンクのみを対象にする
-// IDはページ内の出現順に返す
-export function collectEpisodeIds(workId: string): CollectEpisodeIdsResult {
-  const links = document.querySelectorAll<HTMLAnchorElement>(
-    'a[href*="content="]',
-  );
-  const ids: string[] = [];
+export function findEpisodeLinks(root: Element, workId: string): EpisodeLink[] {
+  const selector = 'a[href*="content="]';
+  const links = [...root.querySelectorAll<HTMLAnchorElement>(selector)];
+  // querySelectorAllはroot自身を検索対象に含めない
+  if (root.matches(selector)) links.unshift(root as HTMLAnchorElement);
+
+  const episodes: EpisodeLink[] = [];
   for (const link of links) {
     const params = new URL(link.href).searchParams;
     if (params.get("season") !== workId) continue;
     const id = params.get("content");
-    if (id) ids.push(id);
+    if (!id) continue;
+    // リンク内の文字列を表示用に使用する
+    // 例：第23話 横浜騒乱編Ｖ
+    const label = link.textContent?.trim() ?? "";
+    episodes.push({ id, label });
   }
-  if (ids.length === 0) return { kind: "notFound" };
-  return { kind: "found", ids };
+  return episodes;
+}
+
+// 選択中のタブから話数の起点を取得する
+// タブのボタンの文字列を話数の起点として扱う
+// 例：「21」のタブなら21
+// タブがない作品や数値に変換できない場合は1
+export function getTabStartNumber(): number {
+  const tabs = document.querySelector(
+    'div[aria-label="vod-list-episode-tab"]',
+  );
+  if (!tabs) return 1;
+  const text = tabs
+    .querySelector('button[aria-selected="true"] span')
+    ?.textContent?.trim();
+  const number = Number(text);
+  return Number.isInteger(number) && number > 0 ? number : 1;
 }

@@ -7,10 +7,8 @@ export default defineManifest({
   description: "昔のアニメをリアタイ化する拡張機能",
   version: pkg.version,
   action: {},
-  // ポップアップを開いたタブのURLを取得するため
-  // tabs権限では強い警告が表示されるのでactiveTabを使用する
   // アクションアイコンのクリック時にサイドパネルを表示するため
-  permissions: ["activeTab", "storage", "sidePanel"],
+  permissions: ["storage", "sidePanel"],
   // サービスワーカーで対象サイトのタブのURLを取得するため
   host_permissions: ["https://tv.dmm.com/*"],
   side_panel: {
