@@ -53,6 +53,17 @@ export function findEpisodeLinks(root: Element, workId: string): EpisodeLink[] {
   return episodes;
 }
 
+// 一覧のダイアログから作品名を取得する
+// 作品画像のaltが作品名だけを持つ
+// 各話のサムネイルはpictureで囲まれていないので対象外になる
+// 取得できなければnull
+export function getTitle(): string | null {
+  const alt = document
+    .querySelector<HTMLImageElement>('[role="dialog"] picture img')
+    ?.alt.trim();
+  return alt ? alt : null;
+}
+
 // 選択中のタブから話数の起点を取得する
 // タブのボタンの文字列を話数の起点として扱う
 // 例：「21」のタブなら21

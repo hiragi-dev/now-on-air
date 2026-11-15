@@ -2,6 +2,17 @@ import { z } from "zod";
 
 // サイドパネルとcontent scriptの両方で使用する型
 
+// 保存する各話
+// 収集時の型もこのスキーマから生成し形の定義を1か所に限定する
+export const SavedEpisode = z.object({
+  // 各話のリンクのcontentパラメータ
+  id: z.string(),
+  // 各話のリンク内の文字列
+  label: z.string(),
+  // 話数
+  number: z.number().int().positive(),
+});
+
 // リアタイ化している作品のバージョン1
 // 開始日時と間隔から解禁された話数を都度計算する
 // ストレージから読み込んだ値をこのスキーマで実行時に検証する
@@ -10,8 +21,10 @@ export const WatchingAnimeV1 = z.object({
   platform: z.literal("dmm"),
   workId: z.string(),
   title: z.string(),
-  // 配列の順序がそのまま話数に対応する
-  episodeIds: z.array(z.string()),
+  // 話数の昇順で保持する
+  // 一部のタブだけ登録すると話数が連続しないので話数も保存する
+  // 解禁は話数ではなく配列の並び順で計算する
+  episodes: z.array(SavedEpisode),
   // ISO 8601形式の日時
   startedAt: z.iso.datetime(),
   // 1話ずつ解禁する間隔
@@ -24,14 +37,8 @@ export const WatchingAnimeV1 = z.object({
 export type WatchingAnime = z.infer<typeof WatchingAnimeV1>;
 
 // 録画中に収集した各話の情報
-export type CapturedEpisode = {
-  // 各話のリンクのcontentパラメータ
-  id: string;
-  // 各話のリンク内の文字列
-  label: string;
-  // 話数
-  number: number;
-};
+// 保存する各話と同じ形
+export type CapturedEpisode = z.infer<typeof SavedEpisode>;
 
 // 録画用のPortを識別する名前
 // collector.tsをサイドパネルから読み込むとリスナーが登録されるのでsharedに配置する
@@ -42,6 +49,12 @@ export const CAPTURE_PORT_NAME = "capture";
 export type SidePanelToContentMessage =
   | { type: "captureStart"; workId: string }
   | { type: "captureEnd" };
+
+// 作品名の問い合わせ
+// 返事を待つためPortではなくsendMessageで送信する
+export type GetTitleRequest = { type: "getTitle" };
+// 取得できなければnull
+export type GetTitleResponse = { title: string | null };
 
 // Portでcontent scriptからサイドパネルに送信するメッセージ
 // 新しく収集した各話だけを送信する

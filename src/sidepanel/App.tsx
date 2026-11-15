@@ -4,8 +4,14 @@ import {
   CAPTURE_PORT_NAME,
   type CapturedEpisode,
   type ContentToSidePanelMessage,
+  type GetTitleRequest,
+  type GetTitleResponse,
   type SidePanelToContentMessage,
 } from "../shared/types";
+
+// 作品名の取得状態
+// 取得できなかった場合は空文字にしてユーザーに入力してもらう
+type TitleState = { kind: "loading" } | { kind: "ready"; value: string };
 
 // 録画の状態
 // Portは録画中だけ保持する
@@ -94,6 +100,33 @@ export default function App() {
     return () => chrome.tabs.onUpdated.removeListener(onUpdated);
   }, [targetTabId]);
 
+  const [title, setTitle] = useState<TitleState>({ kind: "loading" });
+  const workId = state.kind === "detail" ? state.workId : null;
+
+  // 一覧ページを開いたら作品名を問い合わせる
+  // 作品が変わったら古い問い合わせの返事は使わない
+  useEffect(() => {
+    if (targetTabId === null || workId === null) return;
+    let ignore = false;
+    setTitle({ kind: "loading" });
+    const request: GetTitleRequest = { type: "getTitle" };
+    chrome.tabs
+      .sendMessage<GetTitleRequest, GetTitleResponse>(targetTabId, request)
+      .then((response) => {
+        if (ignore) return;
+        setTitle({ kind: "ready", value: response.title ?? "" });
+      })
+      // content scriptが読み込まれていない場合など
+      .catch((error) => {
+        console.error("[NowOnAir] 作品名を取得できませんでした", error);
+        if (ignore) return;
+        setTitle({ kind: "ready", value: "" });
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [targetTabId, workId]);
+
   // 録画中のPort
   const port =
     state.kind === "detail" && state.capture.kind === "recording"
@@ -170,6 +203,22 @@ export default function App() {
       {state.kind === "notDetail" && <p>作品の一覧ページで開いてください</p>}
       {state.kind === "detail" && (
         <>
+          <label style={{ display: "block", margin: "8px 0" }}>
+            作品名
+            {title.kind === "loading" ? (
+              <p>取得中…</p>
+            ) : (
+              <input
+                type="text"
+                value={title.value}
+                placeholder="作品名を入力してください"
+                onChange={(e) =>
+                  setTitle({ kind: "ready", value: e.target.value })
+                }
+                style={{ display: "block", width: "100%" }}
+              />
+            )}
+          </label>
           {state.capture.kind === "idle" && (
             <>
               <p>録画を開始してから、各話のタブを順に切り替えてください</p>
@@ -190,6 +239,12 @@ export default function App() {
           {state.capture.kind === "stopped" && (
             <>
               <p>{state.capture.episodes.length}話を収集しました</p>
+              {/* TODO: 保存処理 */}
+              <button
+                disabled={title.kind !== "ready" || title.value.trim() === ""}
+              >
+                保存
+              </button>
               <EpisodeList episodes={state.capture.episodes} />
             </>
           )}
