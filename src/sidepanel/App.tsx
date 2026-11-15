@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { getWorkId } from "../shared/platforms/dmm";
 import type {
-  PopupMessage,
+  SidePanelMessage,
   RegisterWorkError,
   RegisterWorkResponse,
 } from "../shared/types";
 
 // content scriptへのメッセージ送信に失敗したときのエラー
-// ポップアップ内でのみ発生するのでsharedには配置しない
+// サイドパネル内でのみ発生するのでsharedには配置しない
 type SendError =
   | { type: "needsReload" }
   | { type: "unknown"; message: string; };
@@ -33,9 +33,9 @@ function ScrapeErrorView({ error }: { error: ScrapeError }) {
   }
 }
 
-// ポップアップを開いたタブがどのページか
+// 対象タブがどのページか
 // 一覧ページのときだけ登録処理の状態を保持する
-type PopupState =
+type SidePanelState =
   | { kind: "loading" }
   | { kind: "notDetail" }
   // すでに登録してある作品の一覧ページ
@@ -43,50 +43,66 @@ type PopupState =
   | { kind: "registered"; title: string }
   | { kind: "detail"; tabId: number; workId: string; scrape: ScrapeState };
 
-export default function App() {
-  const [state, setState] = useState<PopupState>({ kind: "loading" });
+// タブのURLからページの状態を判定する
+function judgeTab(tabId: number, url: string | undefined): SidePanelState {
+  // isDetailUrlではなくgetWorkIdで一覧ページかを判定する
+  // 一覧ページでもseasonがなければ作品IDを取得できず登録できないので
+  // その場合もnullを返すgetWorkIdを使用する
+  const workId = url ? getWorkId(url) : null;
+  if (workId) {
+    return { kind: "detail", tabId, workId, scrape: { kind: "idle" } };
+  }
+  return { kind: "notDetail" };
+}
 
-  // ポップアップは開くたびに再読み込みされるので
-  // 初回のレンダリングがポップアップを開いた時点に対応する
+export default function App() {
+  const [state, setState] = useState<SidePanelState>({ kind: "loading" });
+  // サイドパネルの対象タブのID
+  // サイドパネルを表示した時点のアクティブなタブを対象とする
+  const [targetTabId, setTargetTabId] = useState<number | null>(null);
+
+  // サイドパネルの表示時に対象タブを取得する
   useEffect(() => {
     chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      // isDetailUrlではなくgetWorkIdで一覧ページかを判定する
-      // 一覧ページでもseasonがなければ作品IDを取得できず登録できないので
-      // その場合もnullを返すgetWorkIdを使用する
-      let workId = tab?.url ? getWorkId(tab.url) : null;
-
-      // デバッグ用
-      // GitHubのページでもボタンを表示してメッセージ連携をテストできるようにする
-      // devのときのみ有効でbuildの成果物には含まれない
-      if (
-        import.meta.env.DEV &&
-        !workId &&
-        tab?.url?.startsWith("https://github.com/")
-      ) {
-        workId = "debug";
-      }
-      if (tab?.id !== undefined && workId) {
-        setState({
-          kind: "detail",
-          tabId: tab.id,
-          workId,
-          scrape: { kind: "idle" },
-        });
-      } else {
+      if (tab?.id === undefined) {
         setState({ kind: "notDetail" });
+        return;
       }
+      setTargetTabId(tab.id);
+      setState(judgeTab(tab.id, tab.url));
     });
   }, []);
 
+  // 対象タブのURL変更を監視して判定を再実行する
+  // サイドパネルはページ遷移後も表示を継続するため
+  useEffect(() => {
+    if (targetTabId === null) return;
+
+    const onUpdated = (
+      tabId: number,
+      changeInfo: chrome.tabs.OnUpdatedInfo,
+    ) => {
+      // onUpdatedは全タブの更新で発火するので対象タブ以外は無視する
+      if (tabId !== targetTabId) return;
+      // URLが変更されたときだけ判定する
+      // 音声や読み込み状態の変化では登録処理の状態を維持する
+      if (changeInfo.url === undefined) return;
+      setState(judgeTab(tabId, changeInfo.url));
+    };
+
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    return () => chrome.tabs.onUpdated.removeListener(onUpdated);
+  }, [targetTabId]);
+
   // 登録処理はcontent scriptに委譲する
-  // ポップアップは閉じると処理が中断されるので保存までcontent scriptで実行する
+  // 保存までcontent scriptで実行する
   async function registerWork(tabId: number, workId: string): Promise<void> {
     const setScrape = (scrape: ScrapeState) =>
       setState({ kind: "detail", tabId, workId, scrape });
 
     setScrape({ kind: "running" });
     try {
-      const message: PopupMessage = { type: "registerWork", workId };
+      const message: SidePanelMessage = { type: "registerWork", workId };
       const res: RegisterWorkResponse = await chrome.tabs.sendMessage(
         tabId,
         message,
@@ -115,7 +131,7 @@ export default function App() {
   }
 
   return (
-    <main style={{ width: 240, padding: 12 }}>
+    <main style={{ padding: 12 }}>
       <h1 style={{ fontSize: 16, margin: 0 }}>NowOnAir</h1>
       {state.kind === "loading" && <p>読み込み中…</p>}
       {state.kind === "notDetail" && <p>作品の一覧ページで開いてください</p>}

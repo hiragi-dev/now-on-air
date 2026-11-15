@@ -1,7 +1,7 @@
 import { createRoot, type Root } from "react-dom/client";
 import { BlockedOverlay } from "./components/BlockedOverlay";
 import { isPlaybackUrl, collectEpisodeIds } from "../shared/platforms/dmm";
-import type { PopupMessage, RegisterWorkResponse } from "../shared/types";
+import type { SidePanelMessage, RegisterWorkResponse } from "../shared/types";
 
 console.log("[NowOnAir] content script loaded:", location.href);
 
@@ -109,7 +109,7 @@ blockIfNeeded();
 // ポップアップからのメッセージ
 // asyncにしてPromiseを返すと解決した値が応答として送信される
 chrome.runtime.onMessage.addListener(
-  async (message: PopupMessage, sender): Promise<RegisterWorkResponse> => {
+  async (message: SidePanelMessage, sender): Promise<RegisterWorkResponse> => {
     console.log("[NowOnAir] message received:", message, sender);
 
     // TODO: デバッグ用
