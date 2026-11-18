@@ -16,15 +16,35 @@ type TitleState = { kind: "loading" } | { kind: "ready"; value: string };
 // 録画の状態
 // Portは録画中だけ保持する
 // 各話は話数の昇順で保持し差分の受信ごとに新しい配列に置換する
-type CaptureState =
+type CollectState =
   | { kind: "idle" }
   | {
-      kind: "recording";
-      port: chrome.runtime.Port;
+    kind: "recording";
+    port: chrome.runtime.Port;
+    episodes: readonly CapturedEpisode[];
+  }
+  | { kind: "stopped"; episodes: readonly CapturedEpisode[] }
+  // 解禁の開始日時と間隔を設定する
+  // 保存は設定の確定時に実行する
+  | {
+      kind: "configuring";
       episodes: readonly CapturedEpisode[];
-    }
-  // TODO: 停止時に保存する
-  | { kind: "stopped"; episodes: readonly CapturedEpisode[] };
+      startedAt: Date;
+      // 画面では日数で指定する
+      // 保存時に分に変換する
+      intervalDays: number;
+    };
+
+// 解禁の間隔のデフォルトの日数
+const DEFAULT_INTERVAL_DAYS = 7;
+
+// 解禁の開始日時のデフォルト
+// 登録した日に1話を視聴できるように今日の0時にする
+function defaultStartedAt(): Date {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
 
 // 対象タブがどのページか
 type SidePanelState =
@@ -36,12 +56,12 @@ type SidePanelState =
   // 作品名は録画の状態によらず一覧ページで常に表示するのでここで保持する
   // 作品が変わるとdetailごと再生成されるので古い作品名は残らない
   | {
-      kind: "detail";
-      tabId: number;
-      workId: string;
-      title: TitleState;
-      capture: CaptureState;
-    };
+    kind: "detail";
+    tabId: number;
+    workId: string;
+    title: TitleState;
+    collectState: CollectState;
+  };
 
 // タブのURLからページの状態を判定する
 function judgeTab(tabId: number, url: string | undefined): SidePanelState {
@@ -55,7 +75,7 @@ function judgeTab(tabId: number, url: string | undefined): SidePanelState {
       tabId,
       workId,
       title: { kind: "loading" },
-      capture: { kind: "idle" },
+      collectState: { kind: "idle" },
     };
   }
   return { kind: "notDetail" };
@@ -147,8 +167,8 @@ export default function App() {
 
   // 録画中のPort
   const port =
-    state.kind === "detail" && state.capture.kind === "recording"
-      ? state.capture.port
+    state.kind === "detail" && state.collectState.kind === "recording"
+      ? state.collectState.port
       : null;
 
   // 録画中の状態から抜けたときにPortを切断する
@@ -167,14 +187,14 @@ export default function App() {
     // 録画中でなければ無視する
     newPort.onMessage.addListener((message: ContentToSidePanelMessage) => {
       setState((prev) => {
-        if (prev.kind !== "detail" || prev.capture.kind !== "recording") {
+        if (prev.kind !== "detail" || prev.collectState.kind !== "recording") {
           return prev;
         }
         // 結合で生成した新しい配列を並べ替えるので元の配列は変更しない
-        const episodes = [...prev.capture.episodes, ...message.episodes].sort(
+        const episodes = [...prev.collectState.episodes, ...message.episodes].sort(
           (a, b) => a.number - b.number,
         );
-        return { ...prev, capture: { ...prev.capture, episodes } };
+        return { ...prev, collectState: { ...prev.collectState, episodes } };
       });
     });
 
@@ -183,10 +203,10 @@ export default function App() {
     // 収集した分は破棄して録画前の状態に戻す
     newPort.onDisconnect.addListener(() => {
       setState((prev) => {
-        if (prev.kind !== "detail" || prev.capture.kind !== "recording") {
+        if (prev.kind !== "detail" || prev.collectState.kind !== "recording") {
           return prev;
         }
-        return { ...prev, capture: { kind: "idle" } };
+        return { ...prev, collectState: { kind: "idle" } };
       });
     });
 
@@ -194,21 +214,40 @@ export default function App() {
     newPort.postMessage(message);
     setState((prev) =>
       prev.kind === "detail"
-        ? { ...prev, capture: { kind: "recording", port: newPort, episodes: [] } }
+        ? { ...prev, collectState: { kind: "recording", port: newPort, episodes: [] } }
         : prev,
     );
   }
 
   // 録画を停止する
   // Portの切断は状態の変化を受けてuseEffectで処理する
-  function stopCapture(capture: Extract<CaptureState, { kind: "recording" }>) {
+  function stopCapture(collect: Extract<CollectState, { kind: "recording" }>) {
     const message: SidePanelToContentMessage = { type: "captureEnd" };
-    capture.port.postMessage(message);
+    collect.port.postMessage(message);
+    setState((prev) =>
+      prev.kind === "detail"
+        ? {
+          ...prev,
+          collectState: { kind: "stopped", episodes: collect.episodes },
+        }
+        : prev,
+    );
+  }
+
+  // 収集した各話を確定して設定の画面に移動する
+  function goToConfigure(
+    collect: Extract<CollectState, { kind: "stopped" }>,
+  ) {
     setState((prev) =>
       prev.kind === "detail"
         ? {
             ...prev,
-            capture: { kind: "stopped", episodes: capture.episodes },
+            collectState: {
+              kind: "configuring",
+              episodes: collect.episodes,
+              startedAt: defaultStartedAt(),
+              intervalDays: DEFAULT_INTERVAL_DAYS,
+            },
           }
         : prev,
     );
@@ -237,7 +276,7 @@ export default function App() {
               />
             )}
           </label>
-          {state.capture.kind === "idle" && (
+          {state.collectState.kind === "idle" && (
             <>
               <p>録画を開始してから、各話のタブを順に切り替えてください</p>
               <button onClick={() => startCapture(state.tabId, state.workId)}>
@@ -245,27 +284,39 @@ export default function App() {
               </button>
             </>
           )}
-          {state.capture.kind === "recording" && (
+          {state.collectState.kind === "recording" && (
             <>
-              <p>録画中：{state.capture.episodes.length}話</p>
-              <button onClick={() => stopCapture(state.capture as Extract<CaptureState, { kind: "recording" }>)}>
+              <p>録画中：{state.collectState.episodes.length}話</p>
+              <button onClick={() => stopCapture(state.collectState as Extract<CollectState, { kind: "recording" }>)}>
                 停止
               </button>
-              <EpisodeList episodes={state.capture.episodes} />
+              <EpisodeList episodes={state.collectState.episodes} />
             </>
           )}
-          {state.capture.kind === "stopped" && (
+          {state.collectState.kind === "stopped" && (
             <>
-              <p>{state.capture.episodes.length}話を収集しました</p>
-              {/* TODO: 保存処理 */}
+              <p>{state.collectState.episodes.length}話を収集しました</p>
               <button
                 disabled={
                   state.title.kind !== "ready" || state.title.value.trim() === ""
                 }
+                onClick={() =>
+                  goToConfigure(
+                    state.collectState as Extract<CollectState, { kind: "stopped" }>,
+                  )
+                }
               >
-                保存
+                次へ
               </button>
-              <EpisodeList episodes={state.capture.episodes} />
+              <EpisodeList episodes={state.collectState.episodes} />
+            </>
+          )}
+          {state.collectState.kind === "configuring" && (
+            <>
+              {/* TODO: 開始日時と間隔の入力欄 */}
+              <p>{state.collectState.episodes.length}話を登録します</p>
+              <p>開始：{state.collectState.startedAt.toLocaleString()}</p>
+              <p>間隔：{state.collectState.intervalDays}日</p>
             </>
           )}
         </>
