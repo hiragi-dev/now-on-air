@@ -33,7 +33,15 @@ type SidePanelState =
   // すでに登録してある作品の一覧ページ
   // 収集処理は不要なのでdetailとは区別する
   | { kind: "registered"; title: string }
-  | { kind: "detail"; tabId: number; workId: string; capture: CaptureState };
+  // 作品名は録画の状態によらず一覧ページで常に表示するのでここで保持する
+  // 作品が変わるとdetailごと再生成されるので古い作品名は残らない
+  | {
+      kind: "detail";
+      tabId: number;
+      workId: string;
+      title: TitleState;
+      capture: CaptureState;
+    };
 
 // タブのURLからページの状態を判定する
 function judgeTab(tabId: number, url: string | undefined): SidePanelState {
@@ -42,7 +50,13 @@ function judgeTab(tabId: number, url: string | undefined): SidePanelState {
   // その場合もnullを返すgetWorkIdを使用する
   const workId = url ? getWorkId(url) : null;
   if (workId) {
-    return { kind: "detail", tabId, workId, capture: { kind: "idle" } };
+    return {
+      kind: "detail",
+      tabId,
+      workId,
+      title: { kind: "loading" },
+      capture: { kind: "idle" },
+    };
   }
   return { kind: "notDetail" };
 }
@@ -100,15 +114,19 @@ export default function App() {
     return () => chrome.tabs.onUpdated.removeListener(onUpdated);
   }, [targetTabId]);
 
-  const [title, setTitle] = useState<TitleState>({ kind: "loading" });
   const workId = state.kind === "detail" ? state.workId : null;
 
+  // 作品名を更新する
+  // 一覧ページ以外の状態には作品名を追加しない
+  function setTitle(title: TitleState) {
+    setState((prev) => (prev.kind === "detail" ? { ...prev, title } : prev));
+  }
+
   // 一覧ページを開いたら作品名を問い合わせる
-  // 作品が変わったら古い問い合わせの返事は使わない
+  // 作品が変わったら古い問い合わせの応答は使用しない
   useEffect(() => {
     if (targetTabId === null || workId === null) return;
     let ignore = false;
-    setTitle({ kind: "loading" });
     const request: GetTitleRequest = { type: "getTitle" };
     chrome.tabs
       .sendMessage<GetTitleRequest, GetTitleResponse>(targetTabId, request)
@@ -205,12 +223,12 @@ export default function App() {
         <>
           <label style={{ display: "block", margin: "8px 0" }}>
             作品名
-            {title.kind === "loading" ? (
+            {state.title.kind === "loading" ? (
               <p>取得中…</p>
             ) : (
               <input
                 type="text"
-                value={title.value}
+                value={state.title.value}
                 placeholder="作品名を入力してください"
                 onChange={(e) =>
                   setTitle({ kind: "ready", value: e.target.value })
@@ -241,7 +259,9 @@ export default function App() {
               <p>{state.capture.episodes.length}話を収集しました</p>
               {/* TODO: 保存処理 */}
               <button
-                disabled={title.kind !== "ready" || title.value.trim() === ""}
+                disabled={
+                  state.title.kind !== "ready" || state.title.value.trim() === ""
+                }
               >
                 保存
               </button>
