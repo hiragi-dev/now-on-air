@@ -3,7 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getWorkId } from "../shared/platforms/dmm";
+import { workKey } from "../shared/storage";
 import {
+  type WatchingAnime,
   CAPTURE_PORT_NAME,
   type CapturedEpisode,
   type ContentToSidePanelMessage,
@@ -69,6 +71,30 @@ function defaultStartedAt(): Date {
   return date;
 }
 
+// エラー画面に表示するエラー
+// stateにはデータだけを保持し表示はkindごとに切り替える
+// エラーの種類が増えたらここに追加する
+type SidePanelError =
+  // chrome.storageへの保存の失敗
+  // chrome.storageのエラーには種類を表すコードがないので原因は特定しない
+  | { kind: "saveFailed"; message: string };
+
+// エラーの種類ごとの表示
+function ErrorView({ error }: { error: SidePanelError }) {
+  switch (error.kind) {
+    case "saveFailed":
+      return (
+        <div className="flex flex-col gap-2">
+          <p>保存できませんでした</p>
+          <p className="text-muted-foreground">
+            タブを再読み込みしてからもう一度お試しください。保存領域が不足している可能性もあるので、改善しない場合は過去の作品を削除してください。
+          </p>
+          <p className="text-muted-foreground">エラー内容：{error.message}</p>
+        </div>
+      );
+  }
+}
+
 // 対象タブがどのページか
 type SidePanelState =
   | { kind: "loading" }
@@ -76,6 +102,12 @@ type SidePanelState =
   // すでに登録してある作品の一覧ページ
   // 収集処理は不要なのでdetailとは区別する
   | { kind: "registered"; title: string }
+  // 保存の完了画面
+  // 確認ボタンを押すまではURLが変更されても表示を維持する
+  | { kind: "saved"; title: string }
+  // エラー画面
+  // 戻るボタンを押すまではURLが変更されても表示を維持する
+  | { kind: "error"; error: SidePanelError }
   // 作品名は録画の状態によらず一覧ページで常に表示するのでここで保持する
   // 作品が変わるとdetailごと再生成されるので古い作品名は残らない
   | {
@@ -152,7 +184,14 @@ export default function App() {
       // URLが変更されたときだけ判定する
       // 音声や読み込み状態の変化では録画の状態を維持する
       if (changeInfo.url === undefined) return;
-      setState(judgeTab(tabId, changeInfo.url));
+      // 完了画面とエラー画面の表示中はURLが変更されても画面を変更しない
+      // リスナーは登録時の状態しか参照できないので関数を渡して最新の状態で判定する
+      const url = changeInfo.url;
+      setState((prev) =>
+        prev.kind === "saved" || prev.kind === "error"
+          ? prev
+          : judgeTab(tabId, url),
+      );
     };
 
     chrome.tabs.onUpdated.addListener(onUpdated);
@@ -301,11 +340,71 @@ export default function App() {
     );
   }
 
+  // 作品を保存する
+  // 成功したら完了画面、失敗したらエラー画面に移動する
+  async function save(
+    workId: string,
+    title: string,
+    collect: Extract<CollectState, { kind: "configuring" }>,
+  ) {
+    const work: WatchingAnime = {
+      v: 1,
+      platform: "dmm",
+      workId,
+      title,
+      episodes: [...collect.episodes],
+      startedAt: collect.startedAt.toISOString(),
+      intervalMinutes: Number(collect.intervalDays) * 24 * 60,
+    };
+    try {
+      await chrome.storage.local.set({ [workKey(work.platform, workId)]: work });
+      setState({ kind: "saved", title });
+    } catch (error) {
+      console.error("[NowOnAir] 保存できませんでした", error);
+      const message = error instanceof Error ? error.message : String(error);
+      setState({ kind: "error", error: { kind: "saveFailed", message } });
+    }
+  }
+
+  // 完了画面とエラー画面から対象タブの今のページの画面に戻る
+  // 表示中はURLの変更を無視しているのでURLを再取得して判定する
+  async function backToTab() {
+    if (targetTabId === null) return;
+    try {
+      const tab = await chrome.tabs.get(targetTabId);
+      setState(judgeTab(targetTabId, tab.url));
+    } catch {
+      // 対象タブが閉じられた場合
+      // サイドパネルの表示時と同じくアクティブなタブを対象に変更する
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id === undefined) {
+        setState({ kind: "notDetail" });
+        return;
+      }
+      setTargetTabId(tab.id);
+      setState(judgeTab(tab.id, tab.url));
+    }
+  }
+
   return (
     <main className="flex flex-col gap-4 p-4">
       <h1 className="font-semibold">NowOnAir</h1>
       {state.kind === "loading" && <p>読み込み中…</p>}
       {state.kind === "notDetail" && <p>作品の一覧ページで開いてください</p>}
+      {state.kind === "saved" && (
+        <div className="flex flex-col gap-2">
+          <p>「{state.title}」を保存しました</p>
+          <Button onClick={backToTab}>確認</Button>
+        </div>
+      )}
+      {state.kind === "error" && (
+        <div className="flex flex-col gap-2">
+          <ErrorView error={state.error} />
+          <Button variant="outline" onClick={backToTab}>
+            戻る
+          </Button>
+        </div>
+      )}
       {state.kind === "detail" && (
         <>
           <div className="flex flex-col gap-2">
@@ -394,8 +493,15 @@ export default function App() {
                   <p className="text-destructive">1以上の整数を入力してください</p>
                 )}
               </div>
-              {/* TODO: 保存処理 */}
               <Button
+                onClick={() => {
+                  if (state.title.kind !== "ready") return;
+                  save(
+                    state.workId,
+                    state.title.value.trim(),
+                    state.collectState as Extract<CollectState, { kind: "configuring" }>,
+                  );
+                }}
                 disabled={
                   !isValidDays(state.collectState.intervalDays) ||
                   state.title.kind !== "ready" ||
