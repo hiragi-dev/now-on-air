@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { getWorkId } from "../shared/platforms/dmm";
 import {
   CAPTURE_PORT_NAME,
@@ -31,12 +34,32 @@ type CollectState =
       episodes: readonly CapturedEpisode[];
       startedAt: Date;
       // 画面では日数で指定する
+      // 入力欄の文字列をそのまま保持し使用時に数値に変換する
+      // 数値で保持すると空欄が0に変換され入力を削除できないため
       // 保存時に分に変換する
-      intervalDays: number;
+      intervalDays: string;
     };
 
 // 解禁の間隔のデフォルトの日数
-const DEFAULT_INTERVAL_DAYS = 7;
+const DEFAULT_INTERVAL_DAYS = "7";
+
+// 間隔の日数の入力が1以上の整数ならtrueを返す
+// 空欄はNumberで0に変換されるので除外される
+function isValidDays(input: string): boolean {
+  const days = Number(input);
+  return Number.isInteger(days) && days > 0;
+}
+
+// Dateをdatetime-localの入力欄の値に変換する
+// 例：2026-11-16T00:00
+// 入力欄はタイムゾーンを持たないのでローカル時刻で組み立てる
+function toDateTimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
+}
 
 // 解禁の開始日時のデフォルト
 // 登録した日に1話を視聴できるように今日の0時にする
@@ -83,9 +106,11 @@ function judgeTab(tabId: number, url: string | undefined): SidePanelState {
 
 // 収集した各話の一覧
 function EpisodeList({ episodes }: { episodes: readonly CapturedEpisode[] }) {
-  if (episodes.length === 0) return <p>まだ見つかっていません</p>;
+  if (episodes.length === 0) {
+    return <p className="text-muted-foreground">まだ見つかっていません</p>;
+  }
   return (
-    <ol style={{ listStyle: "none", padding: 0 }}>
+    <ol className="flex flex-col gap-1">
       {episodes.map((episode) => (
         <li key={episode.id}>
           {episode.number}：{episode.label}
@@ -253,50 +278,82 @@ export default function App() {
     );
   }
 
+  // 開始日時の入力を更新する
+  // 入力欄を空にした場合は無視して直前の日時を保持する
+  // TODO: 空にできないホイールピッカーに移行したらこの処理は不要
+  function setStartedAt(value: string) {
+    if (value === "") return;
+    const startedAt = new Date(value);
+    setState((prev) =>
+      prev.kind === "detail" && prev.collectState.kind === "configuring"
+        ? { ...prev, collectState: { ...prev.collectState, startedAt } }
+        : prev,
+    );
+  }
+
+  // 間隔の日数の入力を更新する
+  // 設定の画面以外では更新しない
+  function setIntervalDays(intervalDays: string) {
+    setState((prev) =>
+      prev.kind === "detail" && prev.collectState.kind === "configuring"
+        ? { ...prev, collectState: { ...prev.collectState, intervalDays } }
+        : prev,
+    );
+  }
+
   return (
-    <main style={{ padding: 12 }}>
-      <h1 style={{ fontSize: 16, margin: 0 }}>NowOnAir</h1>
+    <main className="flex flex-col gap-4 p-4">
+      <h1 className="font-semibold">NowOnAir</h1>
       {state.kind === "loading" && <p>読み込み中…</p>}
       {state.kind === "notDetail" && <p>作品の一覧ページで開いてください</p>}
       {state.kind === "detail" && (
         <>
-          <label style={{ display: "block", margin: "8px 0" }}>
-            作品名
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="title">作品名</Label>
             {state.title.kind === "loading" ? (
-              <p>取得中…</p>
+              <p className="text-muted-foreground">取得中…</p>
             ) : (
-              <input
+              <Input
+                id="title"
                 type="text"
                 value={state.title.value}
                 placeholder="作品名を入力してください"
                 onChange={(e) =>
                   setTitle({ kind: "ready", value: e.target.value })
                 }
-                style={{ display: "block", width: "100%" }}
               />
             )}
-          </label>
+          </div>
           {state.collectState.kind === "idle" && (
-            <>
-              <p>録画を開始してから、各話のタブを順に切り替えてください</p>
-              <button onClick={() => startCapture(state.tabId, state.workId)}>
+            <div className="flex flex-col gap-2">
+              <p className="text-muted-foreground">
+                録画を開始してから、各話のタブを順に切り替えてください
+              </p>
+              <Button onClick={() => startCapture(state.tabId, state.workId)}>
                 録画を開始
-              </button>
-            </>
+              </Button>
+            </div>
           )}
           {state.collectState.kind === "recording" && (
-            <>
+            <div className="flex flex-col gap-2">
               <p>録画中：{state.collectState.episodes.length}話</p>
-              <button onClick={() => stopCapture(state.collectState as Extract<CollectState, { kind: "recording" }>)}>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  stopCapture(
+                    state.collectState as Extract<CollectState, { kind: "recording" }>,
+                  )
+                }
+              >
                 停止
-              </button>
+              </Button>
               <EpisodeList episodes={state.collectState.episodes} />
-            </>
+            </div>
           )}
           {state.collectState.kind === "stopped" && (
-            <>
+            <div className="flex flex-col gap-2">
               <p>{state.collectState.episodes.length}話を収集しました</p>
-              <button
+              <Button
                 disabled={
                   state.title.kind !== "ready" || state.title.value.trim() === ""
                 }
@@ -307,17 +364,47 @@ export default function App() {
                 }
               >
                 次へ
-              </button>
+              </Button>
               <EpisodeList episodes={state.collectState.episodes} />
-            </>
+            </div>
           )}
           {state.collectState.kind === "configuring" && (
-            <>
-              {/* TODO: 開始日時と間隔の入力欄 */}
+            <div className="flex flex-col gap-4">
               <p>{state.collectState.episodes.length}話を登録します</p>
-              <p>開始：{state.collectState.startedAt.toLocaleString()}</p>
-              <p>間隔：{state.collectState.intervalDays}日</p>
-            </>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="startedAt">開始</Label>
+                <Input
+                  id="startedAt"
+                  type="datetime-local"
+                  value={toDateTimeLocalValue(state.collectState.startedAt)}
+                  onChange={(e) => setStartedAt(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="intervalDays">間隔の日数</Label>
+                <Input
+                  id="intervalDays"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={state.collectState.intervalDays}
+                  onChange={(e) => setIntervalDays(e.target.value)}
+                />
+                {!isValidDays(state.collectState.intervalDays) && (
+                  <p className="text-destructive">1以上の整数を入力してください</p>
+                )}
+              </div>
+              {/* TODO: 保存処理 */}
+              <Button
+                disabled={
+                  !isValidDays(state.collectState.intervalDays) ||
+                  state.title.kind !== "ready" ||
+                  state.title.value.trim() === ""
+                }
+              >
+                保存
+              </Button>
+            </div>
           )}
         </>
       )}
