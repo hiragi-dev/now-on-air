@@ -280,7 +280,7 @@ export default function App() {
 
   // 開始日時の入力を更新する
   // 入力欄を空にした場合は無視して直前の日時を保持する
-  // TODO: 空にできないホイールピッカーに移行したらこの処理は不要
+  // datetime-localは入力欄を空にできるため
   function setStartedAt(value: string) {
     if (value === "") return;
     const startedAt = new Date(value);

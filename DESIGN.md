@@ -16,7 +16,14 @@ UIを書くときは必ずこのルールに従ってください。
 - content scriptからは`src/components`とTailwindのCSSをimportしない。
   - CSSがcontent scriptに入るかはフォルダの場所ではなくimportで決まるため。importするとDMMのページにCSSが注入され干渉する。
 - TailwindのCSSは、サイドパネルと設定ページの入り口でだけ読み込む。
-- 基調の色は薄い赤。色はテーマのCSS変数で定義する。
+- 基調の色は決定ボタンでよく使用される青。Tailwindのblue-600と同じ値。色はテーマのCSS変数で定義する。
+  - 2026-11-19に薄い赤から変更。実際に表示すると見た目が良くなかったため。
+
+## 日時の入力
+
+- 日時はshadcn/uiの`Input`に`type="datetime-local"`を指定して入力する。2026-11-19に決定。
+  - shadcn/uiの日付ピッカーはカレンダー型で日付しか選べず、時刻は別の入力欄が必要になるため。
+  - ホイール型のピッカーはshadcn/uiにない。
 
 ## AIへの制約
 
