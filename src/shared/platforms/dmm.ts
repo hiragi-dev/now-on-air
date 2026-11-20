@@ -11,8 +11,9 @@ export function isPlaybackUrl(url: string): boolean {
 // 例：https://tv.dmm.com/vod/detail/?season=7ah1ifmv7tfqin5tryqyqgsh0
 // ratedが付与される一覧ページも存在する
 // 例：https://tv.dmm.com/vod/rated/detail/?season=g6zxmqikbcu6q4fnhyvfjdch3&content=67aseragtmf5mkn08c1o78pq9
-export function isDetailUrl(url: string): boolean {
-  const { hostname, pathname } = new URL(url);
+// URLへの解析とその失敗の処理は呼び出し元で実行する
+export function isDetailUrl(url: URL): boolean {
+  const { hostname, pathname } = url;
   if (hostname !== "tv.dmm.com") return false;
   return (
     pathname.startsWith("/vod/detail/") ||
@@ -22,9 +23,9 @@ export function isDetailUrl(url: string): boolean {
 
 // 一覧ページのURLから作品IDを抽出する
 // 抽出できなければnull
-export function getWorkId(url: string): string | null {
+export function getWorkId(url: URL): string | null {
   if (!isDetailUrl(url)) return null;
-  return new URL(url).searchParams.get("season");
+  return url.searchParams.get("season");
 }
 
 // 各話のIDと表示用の文字列

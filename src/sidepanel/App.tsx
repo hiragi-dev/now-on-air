@@ -77,7 +77,9 @@ function defaultStartedAt(): Date {
 type SidePanelError =
   // chrome.storageへの保存の失敗
   // chrome.storageのエラーには種類を表すコードがないので原因は特定しない
-  | { kind: "saveFailed"; message: string };
+  | { kind: "saveFailed"; message: string }
+  // タブのURLをURLとして解析できなかった
+  | { kind: "invalidUrl"; url: string };
 
 // エラーの種類ごとの表示
 function ErrorView({ error }: { error: SidePanelError }) {
@@ -90,6 +92,16 @@ function ErrorView({ error }: { error: SidePanelError }) {
             タブを再読み込みしてからもう一度お試しください。保存領域が不足している可能性もあるので、改善しない場合は過去の作品を削除してください。
           </p>
           <p className="text-muted-foreground">エラー内容：{error.message}</p>
+        </div>
+      );
+    case "invalidUrl":
+      return (
+        <div className="flex flex-col gap-2">
+          <p>不正なURLです</p>
+          <p className="text-muted-foreground">
+            DMM TVの作品ページを開いてから、拡張機能をもう一度開いてください。
+          </p>
+          <p className="text-muted-foreground">URL：{error.url}</p>
         </div>
       );
   }
@@ -126,7 +138,15 @@ function judgeTab(tabId: number, url: string | undefined): SidePanelState {
   // isDetailUrlではなくgetWorkIdで一覧ページかを判定する
   // 一覧ページでもseasonがなければ作品IDを取得できず登録できないので
   // その場合もnullを返すgetWorkIdを使用する
-  const workId = url ? getWorkId(url) : null;
+  // URLが空文字の場合はタブがまだページを確定していない
+  // エラーではなくURLの確定時にonUpdatedで再判定されるので一覧ページ以外として扱う
+  if (!url) return { kind: "notDetail" };
+  const parsed = URL.parse(url);
+  if (parsed === null) {
+    console.error("[NowOnAir] タブのURLを解析できませんでした", url);
+    return { kind: "error", error: { kind: "invalidUrl", url } };
+  }
+  const workId = getWorkId(parsed);
   // 登録済みかはstorageの読み込みが必要で非同期になるので
   // ここでは確認中の状態を返しuseEffectで確認する
   if (workId) return { kind: "checking", tabId, workId };
