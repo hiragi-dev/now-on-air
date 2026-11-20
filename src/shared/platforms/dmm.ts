@@ -1,3 +1,5 @@
+import { isSupportedUrl } from "./lib";
+
 // DMM TVのURLに関する判定
 
 // 再生ページのURLならtrueを返す
@@ -7,12 +9,9 @@ export function isPlaybackUrl(url: string): boolean {
   return url.includes("playback");
 }
 
-// 作品の一覧ページのURLならtrueを返す
-// 例：https://tv.dmm.com/vod/detail/?season=7ah1ifmv7tfqin5tryqyqgsh0
-// ratedが付与される一覧ページも存在する
-// 例：https://tv.dmm.com/vod/rated/detail/?season=g6zxmqikbcu6q4fnhyvfjdch3&content=67aseragtmf5mkn08c1o78pq9
-// URLへの解析とその失敗の処理は呼び出し元で実行する
+// DMM TVのdetailのページは作品の詳細ではなく各話の一覧ページ
 export function isDetailUrl(url: URL): boolean {
+  if (!isSupportedUrl(url)) return false;
   const { hostname, pathname } = url;
   if (hostname !== "tv.dmm.com") return false;
   return (
@@ -21,8 +20,7 @@ export function isDetailUrl(url: URL): boolean {
   );
 }
 
-// 一覧ページのURLから作品IDを抽出する
-// 抽出できなければnull
+// seasonパラメータを作品IDとして扱う
 export function getWorkId(url: URL): string | null {
   if (!isDetailUrl(url)) return null;
   return url.searchParams.get("season");
@@ -57,7 +55,6 @@ export function findEpisodeLinks(root: Element, workId: string): EpisodeLink[] {
 // 一覧のダイアログから作品名を取得する
 // 作品画像のaltが作品名だけを持つ
 // 各話のサムネイルはpictureで囲まれていないので対象外になる
-// 取得できなければnull
 export function getTitle(): string | null {
   const alt = document
     .querySelector<HTMLImageElement>('[role="dialog"] picture img')
@@ -67,7 +64,6 @@ export function getTitle(): string | null {
 
 // 選択中のタブから話数の起点を取得する
 // タブのボタンの文字列を話数の起点として扱う
-// 例：「21」のタブなら21
 // タブがない作品や数値に変換できない場合は1
 export function getTabStartNumber(): number {
   const tabs = document.querySelector(
