@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import { isSupportedUrl } from "./lib";
 
 describe("isSupportedUrl", () => {
-  // スキームとホスト名以外が異なっても対象とする
+  // パスとクエリが異なっても対象とする
   it.each([
     { url: "https://tv.dmm.com/" },
     // パスとクエリ
     { url: "https://tv.dmm.com/vod/detail/?season=abc" },
-    // ポート
-    { url: "https://tv.dmm.com:8443/" },
+    // httpsの標準ポートを明示
+    // URLの正規化でポートの指定なしと同じになる
+    { url: "https://tv.dmm.com:443/" },
   ])("$url は対象", ({ url }) => {
     expect(isSupportedUrl(new URL(url))).toBe(true);
   });
@@ -27,6 +28,9 @@ describe("isSupportedUrl", () => {
     // スキームが異なる
     // manifestのmatchesがhttpsのみでcontent scriptが実行されないため
     { url: "http://tv.dmm.com/" },
+    // ポートが指定されている
+    // 同じDOMで表示されるか未確認なので安全のためサポートしない
+    { url: "https://tv.dmm.com:8443/" },
   ])("$url は対象外", ({ url }) => {
     expect(isSupportedUrl(new URL(url))).toBe(false);
   });
