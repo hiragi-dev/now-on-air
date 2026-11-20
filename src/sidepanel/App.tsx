@@ -99,6 +99,9 @@ function ErrorView({ error }: { error: SidePanelError }) {
 type SidePanelState =
   | { kind: "loading" }
   | { kind: "notDetail" }
+  // 一覧ページの作品が登録済みか確認中
+  // 確認が完了したらregisteredかdetailに切り替える
+  | { kind: "checking"; tabId: number; workId: string }
   // すでに登録してある作品の一覧ページ
   // 収集処理は不要なのでdetailとは区別する
   | { kind: "registered"; title: string }
@@ -124,15 +127,9 @@ function judgeTab(tabId: number, url: string | undefined): SidePanelState {
   // 一覧ページでもseasonがなければ作品IDを取得できず登録できないので
   // その場合もnullを返すgetWorkIdを使用する
   const workId = url ? getWorkId(url) : null;
-  if (workId) {
-    return {
-      kind: "detail",
-      tabId,
-      workId,
-      title: { kind: "loading" },
-      collectState: { kind: "idle" },
-    };
-  }
+  // 登録済みかはstorageの読み込みが必要で非同期になるので
+  // ここでは確認中の状態を返しuseEffectで確認する
+  if (workId) return { kind: "checking", tabId, workId };
   return { kind: "notDetail" };
 }
 
@@ -198,6 +195,10 @@ export default function App() {
     return () => chrome.tabs.onUpdated.removeListener(onUpdated);
   }, [targetTabId]);
 
+  // 登録済みかを確認する作品のID
+  const checkingWorkId = state.kind === "checking" ? state.workId : null;
+  // 作品名を取得する作品のID
+  // 未登録と確定してから取得する
   const workId = state.kind === "detail" ? state.workId : null;
 
   // 作品名を更新する

@@ -6,7 +6,14 @@ import path from "node:path";
 import manifest from "./manifest.config.ts";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), crx({ manifest })],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // crxは拡張機能のビルドとdev server用のプラグインでテストには不要
+    // テストの実行に影響しないようにVitestの実行中は除外する
+    // process.env.VITESTはVitestが自動で設定する
+    ...(process.env.VITEST ? [] : [crx({ manifest })]),
+  ],
   resolve: {
     // shadcn/uiが@/components/...の形でimportするため
     alias: { "@": path.resolve(import.meta.dirname, "src") },
