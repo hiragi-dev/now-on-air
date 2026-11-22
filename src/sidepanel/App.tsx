@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getWorkId } from "../shared/platforms/dmm";
-import { workKey } from "../shared/storage";
+import { readWork, workKey } from "../shared/storage";
 import {
   type WatchingAnime,
   CAPTURE_PORT_NAME,
@@ -79,7 +79,15 @@ type SidePanelError =
   // chrome.storageのエラーには種類を表すコードがないので原因は特定しない
   | { kind: "saveFailed"; message: string }
   // タブのURLをURLとして解析できなかった
-  | { kind: "invalidUrl"; url: string };
+  | { kind: "invalidUrl"; url: string }
+  // このコードが対応していない新しいバージョンのデータ
+  // 拡張機能を更新すれば読み込める
+  | { kind: "unknownVersion" }
+  // スキーマに一致しない破損したデータ
+  // 作品の削除と再登録が必要
+  | { kind: "invalidData" }
+  // chrome.storageからの読み込みの失敗
+  | { kind: "readFailed"; message: string };
 
 // エラーの種類ごとの表示
 function ErrorView({ error }: { error: SidePanelError }) {
@@ -102,6 +110,34 @@ function ErrorView({ error }: { error: SidePanelError }) {
             DMM TVの作品ページを開いてから、拡張機能をもう一度開いてください。
           </p>
           <p className="text-muted-foreground">URL：{error.url}</p>
+        </div>
+      );
+    case "unknownVersion":
+      return (
+        <div className="flex flex-col gap-2">
+          <p>作品のデータを読み込めませんでした</p>
+          <p className="text-muted-foreground">
+            新しいバージョンで保存されたデータです。拡張機能を最新のバージョンに更新してください。
+          </p>
+        </div>
+      );
+    case "invalidData":
+      return (
+        <div className="flex flex-col gap-2">
+          <p>作品のデータが破損しています</p>
+          <p className="text-muted-foreground">
+            お手数ですが、この作品を削除してから登録し直してください。
+          </p>
+        </div>
+      );
+    case "readFailed":
+      return (
+        <div className="flex flex-col gap-2">
+          <p>作品のデータを読み込めませんでした</p>
+          <p className="text-muted-foreground">
+            タブを再読み込みしてからもう一度お試しください。
+          </p>
+          <p className="text-muted-foreground">エラー内容：{error.message}</p>
         </div>
       );
   }
@@ -220,6 +256,47 @@ export default function App() {
   // 作品名を取得する作品のID
   // 未登録と確定してから取得する
   const workId = state.kind === "detail" ? state.workId : null;
+
+  // 一覧ページを開いたら作品が登録済みか確認する
+  // 作品が変わったら古い確認の応答は使用しない
+  // stateがcheckingから変わるとcheckingWorkIdも変わるので
+  // 応答の受信時にはstateがcheckingであることが保証される
+  useEffect(() => {
+    if (targetTabId === null || checkingWorkId === null) return;
+    let ignore = false;
+    readWork("dmm", checkingWorkId).then((result) => {
+      if (ignore) return;
+      switch (result.kind) {
+        case "found":
+          setState({ kind: "registered", title: result.work.title });
+          break;
+        case "notRegistered":
+          setState({
+            kind: "detail",
+            tabId: targetTabId,
+            workId: checkingWorkId,
+            title: { kind: "loading" },
+            collectState: { kind: "idle" },
+          });
+          break;
+        case "unknownVersion":
+          setState({ kind: "error", error: { kind: "unknownVersion" } });
+          break;
+        case "invalid":
+          setState({ kind: "error", error: { kind: "invalidData" } });
+          break;
+        case "readFailed":
+          setState({
+            kind: "error",
+            error: { kind: "readFailed", message: result.message },
+          });
+          break;
+      }
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [targetTabId, checkingWorkId]);
 
   // 作品名を更新する
   // 一覧ページ以外の状態には作品名を追加しない
@@ -412,6 +489,8 @@ export default function App() {
       <h1 className="font-semibold">NowOnAir</h1>
       {state.kind === "loading" && <p>読み込み中…</p>}
       {state.kind === "notDetail" && <p>作品の一覧ページで開いてください</p>}
+      {state.kind === "checking" && <p>確認中…</p>}
+      {state.kind === "registered" && <p>「{state.title}」は登録済みです</p>}
       {state.kind === "saved" && (
         <div className="flex flex-col gap-2">
           <p>「{state.title}」を保存しました</p>
