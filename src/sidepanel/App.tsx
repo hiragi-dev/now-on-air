@@ -487,7 +487,13 @@ export default function App() {
 
   return (
     <main className="flex flex-col gap-4 p-4">
-      <h1 className="font-semibold">NowOnAir</h1>
+      {/* 管理ページへの導線はサイドパネルのどの状態でも表示する */}
+      <div className="flex items-center justify-between">
+        <h1 className="font-semibold">NowOnAir</h1>
+        <Button variant="link" onClick={() => chrome.runtime.openOptionsPage()}>
+          管理ページ
+        </Button>
+      </div>
       {state.kind === "loading" && <p>読み込み中…</p>}
       {state.kind === "notDetail" && <p>作品の一覧ページで開いてください</p>}
       {state.kind === "checking" && <p>確認中…</p>}
