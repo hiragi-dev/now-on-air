@@ -450,7 +450,8 @@ export default function App() {
       platform: "dmm",
       workId,
       title,
-      episodes: [...collect.episodes],
+      // 登録の時点ではすべて未視聴
+      episodes: collect.episodes.map((episode) => ({ ...episode, watchedAt: null })),
       startedAt: collect.startedAt.toISOString(),
       intervalMinutes: Number(collect.intervalDays) * 24 * 60,
     };

@@ -11,6 +11,10 @@ export const SavedEpisode = z.object({
   label: z.string(),
   // 話数
   number: z.number().int().positive(),
+  // 視聴した日時
+  // ISO 8601形式で未視聴ならnull
+  // 管理パネルで視聴のリンクを押した時点を視聴とする
+  watchedAt: z.iso.datetime().nullable(),
 });
 
 // リアタイ化している作品のバージョン1
@@ -37,8 +41,9 @@ export const WatchingAnimeV1 = z.object({
 export type WatchingAnime = z.infer<typeof WatchingAnimeV1>;
 
 // 録画中に収集した各話の情報
-// 保存する各話と同じ形
-export type CapturedEpisode = z.infer<typeof SavedEpisode>;
+// 保存する各話から視聴の記録を除外した形
+// 収集の処理が保存のスキーマの項目を知らずに済むように型で除外する
+export type CapturedEpisode = Omit<z.infer<typeof SavedEpisode>, "watchedAt">;
 
 // 録画用のPortを識別する名前
 // collector.tsをサイドパネルから読み込むとリスナーが登録されるのでsharedに配置する
